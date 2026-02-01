@@ -1,0 +1,77 @@
+import { useMaintenance } from '../../context/MaintenanceContext';
+import { formatCurrency } from '../../utils/format';
+
+export default function DetailTable() {
+  const { 
+    currentParts, 
+    currentLabor, 
+    currentSupplies, 
+    selectedMaintenance 
+  } = useMaintenance();
+
+  if (!selectedMaintenance) return null;
+
+  const sectionHeaderStyle = {
+    padding: '0.75rem 1rem',
+    backgroundColor: 'var(--bg-color)',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 'var(--radius-sm)',
+    marginBottom: '0.5rem',
+    marginTop: '1.5rem'
+  };
+
+  const rowStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '0.5rem 1rem',
+    borderBottom: '1px solid var(--border-color)'
+  };
+
+  const renderSection = (title, items, type = 'normal') => (
+    <div>
+      <div style={sectionHeaderStyle}>
+        <span>{title}</span>
+      </div>
+      {items.map((item, idx) => (
+        <div key={item.id || idx} style={rowStyle}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 500 }}>{item.name || item.description}</div>
+            
+            {/* Sub-text: Reference, or Hours/Quantity */}
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              {item.reference && <span>{item.reference} • </span>}
+              
+              {type === 'part' && (
+                <span>
+                  {item.quantity} unds x {formatCurrency(item.price)}
+                </span>
+              )}
+              
+              {type === 'labor' && (
+                 <span>{item.hours} horas</span>
+              )}
+            </div>
+          </div>
+          
+          <div style={{ marginLeft: '1rem', fontWeight: 500 }}>
+            {formatCurrency(item.total || item.price)}
+          </div>
+        </div>
+      ))}
+      {items.length === 0 && <div style={{ padding: '0.5rem 1rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>No aplica</div>}
+    </div>
+  );
+
+  return (
+    <div className="card" style={{ marginTop: '2rem' }}>
+      <h3 className="text-primary">Detalle del Servicio</h3>
+      {renderSection('Repuestos', currentParts, 'part')}
+      {renderSection('Mano de Obra', currentLabor, 'labor')}
+      {renderSection('Insumos y Otros', currentSupplies)}
+    </div>
+  );
+}
