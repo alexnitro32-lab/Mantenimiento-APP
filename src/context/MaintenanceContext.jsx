@@ -11,6 +11,7 @@ import {
     MOCK_CROSS_SELL_ITEMS,
     IVA_RATE
 } from '../data/mockData';
+import { saveToFirebase, loadFromFirebase, subscribeToFirebase, PATHS, migrateFromLocalStorage } from '../services/firebaseService';
 
 // --- HELPER FOR SHARED FILTERING LOGIC ---
 export const calculateAvailableMaintenances = (selectedLine, maintenances, serviceType) => {
@@ -61,109 +62,165 @@ const MaintenanceContext = createContext();
 
 export const useMaintenance = () => useContext(MaintenanceContext);
 
-// --- Local Storage Keys ---
-const STORAGE_KEY_PARTS = 'maint_app_parts';
-const STORAGE_KEY_LABOR = 'maint_app_labor';
-const STORAGE_KEY_SUPPLIES = 'maint_app_supplies';
-const STORAGE_KEY_DEFINITIONS = 'maint_app_definitions';
-const STORAGE_KEY_GLOBAL_RATE = 'maint_app_global_rate';
-const STORAGE_KEY_CROSS_SELL = 'maint_app_cross_sell';
-const STORAGE_KEY_ISSUES = 'maint_app_issues';
-
-// --- Dynamic Vehicle Data (Brands & Lines) ---
-const STORAGE_KEY_BRANDS = 'maint_app_brands';
-const STORAGE_KEY_LINES = 'maint_app_lines';
-
-// Helper to load or default
-const loadState = (key, fallback) => {
-    try {
-        const stored = localStorage.getItem(key);
-        return stored ? JSON.parse(stored) : fallback;
-    } catch (e) {
-        console.error(`Error loading state for ${key}`, e);
-        return fallback;
-    }
-};
-
 export const MaintenanceProvider = ({ children }) => {
-    // --- Admin Mutable State (With Persistence) ---
+    const [isFirebaseInitialized, setIsFirebaseInitialized] = useState(false);
 
-    // Brands & Vehicle Lines (Load First)
-    const [brands, setBrands] = useState(() => loadState(STORAGE_KEY_BRANDS, MOCK_BRANDS));
-    const [vehicleLines, setVehicleLines] = useState(() => loadState(STORAGE_KEY_LINES, MOCK_LINES));
-
-    const [parts, setParts] = useState(() => {
-        const loadedParts = loadState(STORAGE_KEY_PARTS, MOCK_PARTS);
-        // Migration: Add lineId to parts that don't have it (assign to HB20 by default)
-        const migratedParts = loadedParts.map(part => {
-            if (!part.lineId) {
-                return { ...part, lineId: 'l_hb20k' };
-            }
-            return part;
-        });
-        // Save migrated data back to localStorage if any changes were made
-        if (migratedParts.some((p, i) => p.lineId !== loadedParts[i].lineId)) {
-            localStorage.setItem(STORAGE_KEY_PARTS, JSON.stringify(migratedParts));
-        }
-        return migratedParts;
-    });
-    const [laborActivities, setLaborActivities] = useState(() => loadState(STORAGE_KEY_LABOR, MOCK_LABOR_ACTIVITIES));
-    const [supplies, setSupplies] = useState(() => loadState(STORAGE_KEY_SUPPLIES, MOCK_SUPPLIES));
-    const [crossSellItems, setCrossSellItems] = useState(() => loadState(STORAGE_KEY_CROSS_SELL, MOCK_CROSS_SELL_ITEMS));
-    const [globalLaborRate, setGlobalLaborRate] = useState(() => loadState(STORAGE_KEY_GLOBAL_RATE, MOCK_GLOBAL_LABOR_RATE));
-
-    // We keep Maintenances static for now as they are structural
+    // --- Admin Mutable State (With Firebase Persistence) ---
+    const [brands, setBrands] = useState(MOCK_BRANDS);
+    const [vehicleLines, setVehicleLines] = useState(MOCK_LINES);
+    const [parts, setParts] = useState(MOCK_PARTS);
+    const [laborActivities, setLaborActivities] = useState(MOCK_LABOR_ACTIVITIES);
+    const [supplies, setSupplies] = useState(MOCK_SUPPLIES);
+    const [crossSellItems, setCrossSellItems] = useState(MOCK_CROSS_SELL_ITEMS);
+    const [globalLaborRate, setGlobalLaborRate] = useState(MOCK_GLOBAL_LABOR_RATE);
     const [maintenances, setMaintenances] = useState(MOCK_MAINTENANCES);
+    const [maintenanceDefinitions, setMaintenanceDefinitions] = useState({});
+    const [issues, setIssues] = useState([]);
 
-    // Matrix Definition
-    const [maintenanceDefinitions, setMaintenanceDefinitions] = useState(() => {
-        // Try to load from storage first
-        const storedDefs = loadState(STORAGE_KEY_DEFINITIONS, null);
-        if (storedDefs) return storedDefs;
+    // --- Initialize Firebase Data ---
+    useEffect(() => {
+        const initializeFirebase = async () => {
+            try {
+                // Check if Firebase has data, if not migrate from LocalStorage
+                const firebaseBrands = await loadFromFirebase(PATHS.BRANDS);
 
-        // Fallback: Generate from Mock Data (Initial Seeding)
-        const initialDefs = {};
-        MOCK_LINES.forEach(line => {
-            MOCK_MAINTENANCES.forEach(maint => {
-                const laborIds = MOCK_MAINTENANCE_ACTIVITIES[maint.id] || [];
-                let supplyIds = MOCK_SUPPLIES.map(s => s.id);
-
-                const allocatedParts = MOCK_PARTS
-                    .filter(p => p.allocations && p.allocations.some(a => a.lineId === line.id))
-                    .map(p => ({
-                        id: p.id,
-                        quantity: p.allocations.find(a => a.lineId === line.id).quantity
-                    }));
-
-                // Heuristic for Oil Change logic if not explicitly defined
-                if (allocatedParts.length === 0 && (maint.type === 'mileage' || maint.id === 'm_oil')) {
-                    const oilFilter = MOCK_PARTS.find(p => p.name.toLowerCase().includes('filtro de aceite') && p.lineId === line.id);
-                    const oil = MOCK_PARTS.find(p => p.name.toLowerCase().includes('aceite') && !p.name.toLowerCase().includes('transmision') && p.lineId === line.id);
-                    if (oilFilter) allocatedParts.push({ id: oilFilter.id, quantity: 1 });
-                    if (oil) allocatedParts.push({ id: oil.id, quantity: 4 }); // Assuming 4 quarts default if quantity not specified
+                if (!firebaseBrands) {
+                    console.log('No data in Firebase, migrating from LocalStorage...');
+                    await migrateFromLocalStorage();
                 }
 
-                if (laborIds.length > 0 || allocatedParts.length > 0 || supplyIds.length > 0) {
-                    initialDefs[`${line.id}_${maint.id}`] = {
-                        laborIds,
-                        supplyIds,
-                        parts: allocatedParts
-                    };
-                }
-            });
-        });
-        return initialDefs;
-    });
+                // Load all data from Firebase
+                const [
+                    fbBrands,
+                    fbLines,
+                    fbParts,
+                    fbLabor,
+                    fbSupplies,
+                    fbCrossSell,
+                    fbGlobalRate,
+                    fbDefinitions,
+                    fbIssues
+                ] = await Promise.all([
+                    loadFromFirebase(PATHS.BRANDS, MOCK_BRANDS),
+                    loadFromFirebase(PATHS.LINES, MOCK_LINES),
+                    loadFromFirebase(PATHS.PARTS, MOCK_PARTS),
+                    loadFromFirebase(PATHS.LABOR, MOCK_LABOR_ACTIVITIES),
+                    loadFromFirebase(PATHS.SUPPLIES, MOCK_SUPPLIES),
+                    loadFromFirebase(PATHS.CROSS_SELL, MOCK_CROSS_SELL_ITEMS),
+                    loadFromFirebase(PATHS.GLOBAL_RATE, MOCK_GLOBAL_LABOR_RATE),
+                    loadFromFirebase(PATHS.DEFINITIONS, {}),
+                    loadFromFirebase(PATHS.ISSUES, [])
+                ]);
 
-    // --- Persistence Effects ---
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_PARTS, JSON.stringify(parts)); }, [parts]);
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_LABOR, JSON.stringify(laborActivities)); }, [laborActivities]);
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_SUPPLIES, JSON.stringify(supplies)); }, [supplies]);
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_CROSS_SELL, JSON.stringify(crossSellItems)); }, [crossSellItems]);
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_GLOBAL_RATE, JSON.stringify(globalLaborRate)); }, [globalLaborRate]);
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_DEFINITIONS, JSON.stringify(maintenanceDefinitions)); }, [maintenanceDefinitions]);
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_BRANDS, JSON.stringify(brands)); }, [brands]);
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_LINES, JSON.stringify(vehicleLines)); }, [vehicleLines]);
+                setBrands(fbBrands);
+                setVehicleLines(fbLines);
+                setParts(fbParts);
+                setLaborActivities(fbLabor);
+                setSupplies(fbSupplies);
+                setCrossSellItems(fbCrossSell);
+                setGlobalLaborRate(fbGlobalRate);
+                setMaintenanceDefinitions(fbDefinitions);
+                setIssues(fbIssues);
+
+                // Initialize definitions if empty
+                if (Object.keys(fbDefinitions).length === 0) {
+                    const initialDefs = {};
+                    MOCK_LINES.forEach(line => {
+                        MOCK_MAINTENANCES.forEach(maint => {
+                            const laborIds = MOCK_MAINTENANCE_ACTIVITIES[maint.id] || [];
+                            let supplyIds = MOCK_SUPPLIES.map(s => s.id);
+
+                            const allocatedParts = MOCK_PARTS
+                                .filter(p => p.allocations && p.allocations.some(a => a.lineId === line.id))
+                                .map(p => ({
+                                    id: p.id,
+                                    quantity: p.allocations.find(a => a.lineId === line.id).quantity
+                                }));
+
+                            if (allocatedParts.length === 0 && (maint.type === 'mileage' || maint.id === 'm_oil')) {
+                                const oilFilter = MOCK_PARTS.find(p => p.name.toLowerCase().includes('filtro de aceite') && p.lineId === line.id);
+                                const oil = MOCK_PARTS.find(p => p.name.toLowerCase().includes('aceite') && !p.name.toLowerCase().includes('transmision') && p.lineId === line.id);
+                                if (oilFilter) allocatedParts.push({ id: oilFilter.id, quantity: 1 });
+                                if (oil) allocatedParts.push({ id: oil.id, quantity: 4 });
+                            }
+
+                            if (laborIds.length > 0 || allocatedParts.length > 0 || supplyIds.length > 0) {
+                                initialDefs[`${line.id}_${maint.id}`] = {
+                                    laborIds,
+                                    supplyIds,
+                                    parts: allocatedParts
+                                };
+                            }
+                        });
+                    });
+                    setMaintenanceDefinitions(initialDefs);
+                    await saveToFirebase(PATHS.DEFINITIONS, initialDefs);
+                }
+
+                setIsFirebaseInitialized(true);
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                setIsFirebaseInitialized(true); // Continue with mock data
+            }
+        };
+
+        initializeFirebase();
+    }, []);
+
+    // --- Firebase Persistence Effects ---
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.PARTS, parts);
+        }
+    }, [parts, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.LABOR, laborActivities);
+        }
+    }, [laborActivities, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.SUPPLIES, supplies);
+        }
+    }, [supplies, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.CROSS_SELL, crossSellItems);
+        }
+    }, [crossSellItems, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.GLOBAL_RATE, globalLaborRate);
+        }
+    }, [globalLaborRate, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.DEFINITIONS, maintenanceDefinitions);
+        }
+    }, [maintenanceDefinitions, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.BRANDS, brands);
+        }
+    }, [brands, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.LINES, vehicleLines);
+        }
+    }, [vehicleLines, isFirebaseInitialized]);
+
+    useEffect(() => {
+        if (isFirebaseInitialized) {
+            saveToFirebase(PATHS.ISSUES, issues);
+        }
+    }, [issues, isFirebaseInitialized]);
 
     const addBrand = (name) => {
         const newBrand = { id: Date.now(), name };
@@ -180,7 +237,7 @@ export const MaintenanceProvider = ({ children }) => {
     const addVehicleLine = (lineData) => {
         const newLine = {
             ...lineData,
-            id: `l_${Date.now()}` // Generate ID 
+            id: `l_${Date.now()}`
         };
         setVehicleLines(prev => [...prev, newLine]);
     };
@@ -196,10 +253,6 @@ export const MaintenanceProvider = ({ children }) => {
         setParts(prev => prev.filter(part => part.lineId !== id));
     };
 
-    const [issues, setIssues] = useState(() => loadState(STORAGE_KEY_ISSUES, []));
-    useEffect(() => { localStorage.setItem(STORAGE_KEY_ISSUES, JSON.stringify(issues)); }, [issues]);
-
-
     // --- Advisor Selection State ---
     const [selectedBrand, setSelectedBrand] = useState(null);
     const [selectedLine, setSelectedLine] = useState(null);
@@ -214,7 +267,6 @@ export const MaintenanceProvider = ({ children }) => {
         setSelectedAdditionals([]);
         setSelectedCrossSell([]);
     }, [selectedMaintenance?.id]);
-
 
     // --- Actions ---
     const updatePart = (id, updates) => setParts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -281,13 +333,11 @@ export const MaintenanceProvider = ({ children }) => {
 
     // --- MONOLITHIC CALCULATION ---
     const contextData = useMemo(() => {
-        // 1. Resolve Base Definition
         let definition = null;
         if (selectedLine && selectedMaintenance) {
             definition = resolveMaintenanceDefinition(selectedLine.id, selectedMaintenance.id);
         }
 
-        // 2. Resolve Base Lists
         let currentParts = [];
         let currentLabor = [];
         let currentSupplies = [];
@@ -330,12 +380,10 @@ export const MaintenanceProvider = ({ children }) => {
                 .filter(Boolean);
         }
 
-        // 3. Resolve Additionals
         const resolvedAdditionals = selectedAdditionals.map(name => {
             const normalize = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const searchName = normalize(name);
 
-            // Logic: Labor -> Parts -> Fallbacks
             if (searchName.includes('alineacion')) {
                 const align = laborActivities.find(l => normalize(l.description).includes('alineacion'));
                 if (align) {
@@ -367,7 +415,6 @@ export const MaintenanceProvider = ({ children }) => {
             return { id: name, name: name, price: 0, total: 0, type: 'unknown' };
         });
 
-        // 4. Resolve Cross Sell
         const resolvedCrossSell = selectedCrossSell
             .map(id => {
                 const item = crossSellItems.find(i => i.id === id);
@@ -376,7 +423,6 @@ export const MaintenanceProvider = ({ children }) => {
             })
             .filter(Boolean);
 
-        // 5. Merge Lists
         const mergedParts = [
             ...currentParts,
             ...resolvedAdditionals.filter(i => i.type === 'part')
@@ -391,7 +437,6 @@ export const MaintenanceProvider = ({ children }) => {
             ...resolvedAdditionals.filter(i => i.type === 'unknown')
         ];
 
-        // 6. Calculate Totals
         const totalParts = mergedParts.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
         const totalLabor = mergedLabor.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
         const totalSupplies = mergedSupplies.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
@@ -401,7 +446,7 @@ export const MaintenanceProvider = ({ children }) => {
         const total = subtotal + taxValue;
 
         return {
-            currentParts, currentLabor, currentSupplies, // base
+            currentParts, currentLabor, currentSupplies,
             currentAdditionals: resolvedAdditionals,
             currentCrossSell: resolvedCrossSell,
             finalMergedLists: { mergedParts, mergedLabor, mergedSupplies },
@@ -438,7 +483,6 @@ export const MaintenanceProvider = ({ children }) => {
         updateGlobalLaborRate, updateLaborActivity, addLaborActivity, deleteLaborActivity,
         updateSupply, updateCrossSellItem, addCrossSellItem, deleteCrossSellItem, updateMaintenanceDefinition, resolveMaintenanceDefinition, updatePartsByReference,
 
-        // Issue Reporting
         issues,
         addIssue: (description, email) => {
             const newIssue = { id: `issue_${Date.now()}`, description, email, date: new Date().toISOString(), status: 'open' };
@@ -446,7 +490,6 @@ export const MaintenanceProvider = ({ children }) => {
         },
         deleteIssue: (id) => setIssues(prev => prev.filter(i => i.id !== id)),
 
-        // Export MOCK_LINES for use in AdminDashboard
         vehicleLines,
         brands,
         addBrand,
