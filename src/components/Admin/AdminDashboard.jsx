@@ -340,7 +340,7 @@ export default function AdminDashboard() {
                                                 <>
                                                     <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                                         <input
-                                                            style={{ ...inputStyle, flex: 2, padding: '4px 8px', fontSize: '0.9rem' }}
+                                                            style={{ flex: 2, padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.9rem' }}
                                                             value={editActivityForm.description}
                                                             onChange={e => setEditActivityForm({ ...editActivityForm, description: e.target.value })}
                                                             placeholder="Descripción"
@@ -348,7 +348,7 @@ export default function AdminDashboard() {
                                                         <input
                                                             type="number"
                                                             step="0.1"
-                                                            style={{ ...inputStyle, flex: 1, padding: '4px 8px', fontSize: '0.9rem' }}
+                                                            style={{ flex: 1, padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.9rem' }}
                                                             value={editActivityForm.hours}
                                                             onChange={e => setEditActivityForm({ ...editActivityForm, hours: Number(e.target.value) })}
                                                             placeholder="Hrs"
@@ -357,13 +357,13 @@ export default function AdminDashboard() {
                                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                                         <button
                                                             onClick={() => handleSaveActivityEdit(act.id)}
-                                                            style={{ ...btnStyle, background: '#22c55e', padding: '4px 8px', fontSize: '0.8rem' }}
+                                                            style={{ padding: '0.5rem 1rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
                                                         >
                                                             Guardar
                                                         </button>
                                                         <button
                                                             onClick={handleCancelActivityEdit}
-                                                            style={{ ...btnStyle, background: '#94a3b8', padding: '4px 8px', fontSize: '0.8rem' }}
+                                                            style={{ padding: '0.5rem 1rem', background: '#94a3b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
                                                         >
                                                             Cancelar
                                                         </button>
@@ -378,12 +378,16 @@ export default function AdminDashboard() {
                                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                                         <button
                                                             onClick={() => handleEditActivityClick(act)}
-                                                            style={{ ...btnStyle, background: 'none', color: 'var(--primary-color)', border: '1px solid var(--primary-color)', padding: '4px 8px', fontSize: '0.8rem' }}
+                                                            style={{ padding: '0.5rem 1rem', background: 'none', color: 'var(--primary-color)', border: '1px solid var(--primary-color)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
                                                             title="Editar"
                                                         >
                                                             Editar
                                                         </button>
-                                                        <button style={deleteBtnStyle} onClick={() => confirmDeleteLabor(act.id)} title="Eliminar">
+                                                        <button
+                                                            style={{ padding: '0.25rem 0.5rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                            onClick={() => confirmDeleteLabor(act.id)}
+                                                            title="Eliminar"
+                                                        >
                                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                                 <polyline points="3 6 5 6 21 6"></polyline>
                                                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
