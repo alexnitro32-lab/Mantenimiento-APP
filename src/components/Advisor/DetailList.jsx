@@ -28,6 +28,11 @@ export default function DetailTable() {
         const currentPartIds = new Set(currentParts.map(p => p.id));
         const currentLaborIds = new Set(currentLabor.map(l => l.id));
 
+        // Check if current labor includes comprehensive services
+        const hasRutinaMantenimiento = currentLabor.some(l =>
+            l.description && l.description.toLowerCase().includes('rutina de mantenimiento')
+        );
+
         // Find unused items
         // 1. Parts: Must belong to selectedLine AND not be in current recipe
         const unusedParts = parts.filter(p =>
@@ -36,7 +41,22 @@ export default function DetailTable() {
         );
 
         // 2. Labor: Must not be in current recipe
-        const unusedLabor = laborActivities.filter(l => !currentLaborIds.has(l.id));
+        let unusedLabor = laborActivities.filter(l => !currentLaborIds.has(l.id));
+
+        // 3. INTELLIGENT FILTERING: If recipe has "Rutina de Mantenimiento", 
+        //    exclude redundant services
+        if (hasRutinaMantenimiento) {
+            const redundantServices = [
+                'cambio de aceite',
+                'rutina de mantenimiento',
+                'mantenimiento de frenos'
+            ];
+
+            unusedLabor = unusedLabor.filter(l => {
+                const desc = (l.description || '').toLowerCase();
+                return !redundantServices.some(service => desc.includes(service));
+            });
+        }
 
         return [
             ...unusedLabor.map(l => ({ id: l.id, name: l.description, type: 'labor' })),
