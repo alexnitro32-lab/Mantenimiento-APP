@@ -39,7 +39,7 @@ export default function AdminDashboard() {
     } = useMaintenance();
 
     // --- Local State for Forms ---
-    const [newPart, setNewPart] = useState({ name: '', reference: '', price: 0 });
+    const [newPart, setNewPart] = useState({ name: '', reference: '', price: 0, category: 'standard', isQuantityEditable: false });
     const [newActivity, setNewActivity] = useState({ description: '', hours: 0 });
     const [newCrossSell, setNewCrossSell] = useState({ name: '', price: 0 });
 
@@ -90,7 +90,7 @@ export default function AdminDashboard() {
             return;
         }
         addPart({ ...newPart, lineId: selectedPartsLine, allocations: [] });
-        setNewPart({ name: '', reference: '', price: 0 });
+        setNewPart({ name: '', reference: '', price: 0, category: 'standard', isQuantityEditable: false });
     };
 
     const handleAddActivity = (e) => {
@@ -422,7 +422,7 @@ export default function AdminDashboard() {
                                     {selectedPartsLine ? (
                                         <>
                                             <form onSubmit={handleAddPart} style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
                                                     <div>
                                                         <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '4px' }}>Referencia</label>
                                                         <input placeholder="REF-123" required style={inputStyle} value={newPart.reference} onChange={e => setNewPart({ ...newPart, reference: e.target.value })} />
@@ -435,7 +435,26 @@ export default function AdminDashboard() {
                                                         <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '4px' }}>Precio</label>
                                                         <input type="number" required style={inputStyle} value={newPart.price || ''} onChange={e => setNewPart({ ...newPart, price: Number(e.target.value) })} />
                                                     </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '4px' }}>Categoría</label>
+                                                        <select style={inputStyle} value={newPart.category || 'standard'} onChange={e => setNewPart({ ...newPart, category: e.target.value })}>
+                                                            <option value="standard">Estándar</option>
+                                                            <option value="additive">Aditivo</option>
+                                                        </select>
+                                                    </div>
                                                     <button type="submit" style={btnStyle}>Agregar</button>
+                                                </div>
+                                                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#eff6ff', padding: '0.75rem', borderRadius: '6px' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        id="editableQty"
+                                                        checked={newPart.isQuantityEditable || false}
+                                                        onChange={e => setNewPart({ ...newPart, isQuantityEditable: e.target.checked })}
+                                                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                    />
+                                                    <label htmlFor="editableQty" style={{ cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500, color: '#1e40af' }}>
+                                                        ✏️ Cantidad editable por asesor (ej: Bujías, Líquido de frenos, Refrigerante)
+                                                    </label>
                                                 </div>
                                             </form>
                                             <div style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', maxHeight: '500px', overflowY: 'auto' }}>
