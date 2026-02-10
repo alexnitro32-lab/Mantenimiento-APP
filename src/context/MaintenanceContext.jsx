@@ -262,15 +262,10 @@ export const MaintenanceProvider = ({ children }) => {
     const [selectedAdditionals, setSelectedAdditionals] = useState([]);
     const [selectedCrossSell, setSelectedCrossSell] = useState([]);
 
-    // --- Custom Quantities for Editable Parts ---
-    const [customQuantities, setCustomQuantities] = useState({});
-    // Format: { partId: customQuantity }
-
     // Reset additionals and cross-sell when maintenance type changes
     useEffect(() => {
         setSelectedAdditionals([]);
         setSelectedCrossSell([]);
-        setCustomQuantities({}); // Reset custom quantities
     }, [selectedMaintenance?.id]);
 
     // --- Actions ---
@@ -291,15 +286,8 @@ export const MaintenanceProvider = ({ children }) => {
     const addCrossSellItem = (newItem) => setCrossSellItems(prev => [...prev, { ...newItem, id: `cs${Date.now()}` }]);
     const deleteCrossSellItem = (id) => setCrossSellItems(prev => prev.filter(i => i.id !== id));
 
-    const updatePartsByReference = async (reference, updates) => {
-        // Update local state
+    const updatePartsByReference = (reference, updates) => {
         setParts(prev => prev.map(p => p.reference === reference ? { ...p, ...updates } : p));
-
-        // Update in Firebase for all parts with this reference
-        const partsToUpdate = parts.filter(p => p.reference === reference);
-        for (const part of partsToUpdate) {
-            await updatePart(part.id, updates);
-        }
     };
 
     // --- INHERITANCE LOGIC ---
@@ -360,13 +348,7 @@ export const MaintenanceProvider = ({ children }) => {
                     const partData = parts.find(p => p.id === defPart.id);
                     if (!partData) return null;
                     if (partData.lineId !== selectedLine.id) return null;
-
-                    // Use custom quantity if available, otherwise use default
-                    const defaultQty = Number(defPart.quantity) || 0;
-                    const qty = customQuantities[defPart.id] !== undefined
-                        ? Number(customQuantities[defPart.id])
-                        : defaultQty;
-
+                    const qty = Number(defPart.quantity) || 0;
                     const unitPrice = Number(partData.price) || 0;
                     return {
                         ...partData,
@@ -474,21 +456,13 @@ export const MaintenanceProvider = ({ children }) => {
     }, [
         selectedLine, selectedMaintenance, maintenanceDefinitions,
         parts, laborActivities, supplies, crossSellItems, globalLaborRate,
-        selectedAdditionals, selectedCrossSell, customQuantities
+        selectedAdditionals, selectedCrossSell
     ]);
 
     const resetSelection = () => {
         setSelectedMaintenance(null);
         setSelectedAdditionals([]);
         setSelectedCrossSell([]);
-        setCustomQuantities({}); // Reset custom quantities
-    };
-
-    const updateCustomQuantity = (partId, quantity) => {
-        setCustomQuantities(prev => ({
-            ...prev,
-            [partId]: quantity
-        }));
     };
 
     const value = {
@@ -504,8 +478,6 @@ export const MaintenanceProvider = ({ children }) => {
 
         selectedAdditionals, toggleAdditional,
         selectedCrossSell, toggleCrossSell,
-
-        customQuantities, updateCustomQuantity,
 
         resetSelection, updatePart, addPart, deletePart, getPartsByLine,
         updateGlobalLaborRate, updateLaborActivity, addLaborActivity, deleteLaborActivity,

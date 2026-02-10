@@ -16,9 +16,7 @@ export default function DetailTable() {
         laborActivities,
         currentParts,
         currentLabor,
-        selectedLine,
-        customQuantities,
-        updateCustomQuantity
+        selectedLine
     } = useMaintenance();
 
     // --- DYNAMIC SUGGESTED ADDITIONALS ---
@@ -87,41 +85,12 @@ export default function DetailTable() {
             {items.map((item, idx) => (
                 <div key={`${item.id}-${idx}`} className="detail-row">
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500 }}>
-                            {item.name || item.description}
-                            {type === 'part' && item.isQuantityEditable && (
-                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#3b82f6', fontWeight: 400 }}>
-                                    ✏️ Editable
-                                </span>
-                            )}
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ fontWeight: 500 }}>{item.name || item.description}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                             {type === 'part' && item.quantity && (
-                                <>
-                                    {item.isQuantityEditable ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                value={customQuantities[item.id] !== undefined ? customQuantities[item.id] : item.quantity}
-                                                onChange={(e) => updateCustomQuantity(item.id, Number(e.target.value))}
-                                                style={{
-                                                    width: '60px',
-                                                    padding: '4px 8px',
-                                                    border: '1px solid #3b82f6',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: 500
-                                                }}
-                                            />
-                                            <span>unds x {formatCurrency(item.price)}</span>
-                                        </div>
-                                    ) : (
-                                        <span>
-                                            {item.quantity} unds x {formatCurrency(item.price)}
-                                        </span>
-                                    )}
-                                </>
+                                <span>
+                                    {item.quantity} unds x {formatCurrency(item.price)}
+                                </span>
                             )}
                             {type === 'part' && !item.quantity && (
                                 <span className="text-secondary">(Adicional)</span>
