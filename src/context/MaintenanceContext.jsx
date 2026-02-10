@@ -291,8 +291,15 @@ export const MaintenanceProvider = ({ children }) => {
     const addCrossSellItem = (newItem) => setCrossSellItems(prev => [...prev, { ...newItem, id: `cs${Date.now()}` }]);
     const deleteCrossSellItem = (id) => setCrossSellItems(prev => prev.filter(i => i.id !== id));
 
-    const updatePartsByReference = (reference, updates) => {
+    const updatePartsByReference = async (reference, updates) => {
+        // Update local state
         setParts(prev => prev.map(p => p.reference === reference ? { ...p, ...updates } : p));
+
+        // Update in Firebase for all parts with this reference
+        const partsToUpdate = parts.filter(p => p.reference === reference);
+        for (const part of partsToUpdate) {
+            await updatePart(part.id, updates);
+        }
     };
 
     // --- INHERITANCE LOGIC ---
