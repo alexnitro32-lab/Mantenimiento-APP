@@ -229,7 +229,7 @@ export default function AdminDashboard() {
 
     // --- GENERAL PARTS LOGIC ---
     const [editingGeneralPartRef, setEditingGeneralPartRef] = useState(null);
-    const [generalPartForm, setGeneralPartForm] = useState({ name: '', price: 0 });
+    const [generalPartForm, setGeneralPartForm] = useState({ name: '', price: 0, category: 'standard', isQuantityEditable: false });
 
     // Group parts by reference for "General Parts" view
     // Only include parts from vehicle lines that still exist
@@ -248,7 +248,12 @@ export default function AdminDashboard() {
 
     const handleEditGeneralClick = (part) => {
         setEditingGeneralPartRef(part.reference);
-        setGeneralPartForm({ name: part.name, price: part.price });
+        setGeneralPartForm({
+            name: part.name,
+            price: part.price,
+            category: part.category || 'standard',
+            isQuantityEditable: part.isQuantityEditable || false
+        });
     };
 
     const handleSaveGeneralEdit = (reference) => {
@@ -565,6 +570,8 @@ export default function AdminDashboard() {
                                                     <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Referencia</th>
                                                     <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Descripción</th>
                                                     <th style={{ padding: '0.75rem', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>Precio</th>
+                                                    <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Categoría</th>
+                                                    <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Cant. Editable</th>
                                                     <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Acciones</th>
                                                 </tr>
                                             </thead>
@@ -590,6 +597,24 @@ export default function AdminDashboard() {
                                                                     />
                                                                 </td>
                                                                 <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                                                    <select
+                                                                        style={{ ...inputStyle, padding: '4px 8px', fontSize: '0.85rem' }}
+                                                                        value={generalPartForm.category || 'standard'}
+                                                                        onChange={e => setGeneralPartForm({ ...generalPartForm, category: e.target.value })}
+                                                                    >
+                                                                        <option value="standard">Estándar</option>
+                                                                        <option value="additive">Aditivo</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={generalPartForm.isQuantityEditable || false}
+                                                                        onChange={e => setGeneralPartForm({ ...generalPartForm, isQuantityEditable: e.target.checked })}
+                                                                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                                    />
+                                                                </td>
+                                                                <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                                                                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
                                                                         <button
                                                                             onClick={() => handleSaveGeneralEdit(part.reference)}
@@ -611,6 +636,20 @@ export default function AdminDashboard() {
                                                                 <td style={{ padding: '0.75rem' }}>{part.name}</td>
                                                                 <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 600 }}>
                                                                     {formatCurrency(part.price)}
+                                                                </td>
+                                                                <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                                                    <span style={{
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: '4px',
+                                                                        fontSize: '0.75rem',
+                                                                        background: part.category === 'additive' ? '#fef3c7' : '#e0f2fe',
+                                                                        color: part.category === 'additive' ? '#92400e' : '#075985'
+                                                                    }}>
+                                                                        {part.category === 'additive' ? '🧪 Aditivo' : '🔧 Estándar'}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                                                    {part.isQuantityEditable ? '✅' : '—'}
                                                                 </td>
                                                                 <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                                                                     <button
