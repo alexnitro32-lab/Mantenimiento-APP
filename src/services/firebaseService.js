@@ -51,9 +51,7 @@ export const loadFromFirebase = async (path, fallback = null) => {
 export const subscribeToFirebase = (path, callback) => {
     const dbRef = ref(database, path);
     onValue(dbRef, (snapshot) => {
-        if (snapshot.exists()) {
-            callback(snapshot.val());
-        }
+        callback(snapshot.exists() ? snapshot.val() : null);
     });
     return dbRef;
 };

@@ -11,7 +11,7 @@ import {
     MOCK_CROSS_SELL_ITEMS,
     IVA_RATE
 } from '../data/mockData';
-import { saveToFirebase, loadFromFirebase, subscribeToFirebase, PATHS, migrateFromLocalStorage } from '../services/firebaseService';
+import { saveToFirebase, loadFromFirebase, subscribeToFirebase, unsubscribeFromFirebase, PATHS, migrateFromLocalStorage } from '../services/firebaseService';
 
 // --- HELPER FOR SHARED FILTERING LOGIC ---
 export const calculateAvailableMaintenances = (selectedLine, maintenances, serviceType) => {
@@ -77,161 +77,67 @@ export const MaintenanceProvider = ({ children }) => {
     const [maintenanceDefinitions, setMaintenanceDefinitions] = useState({});
     const [issues, setIssues] = useState([]);
 
-    // --- Initialize Firebase Data ---
+    // --- Initialize Firebase Data & Subscriptions ---
     useEffect(() => {
+        let unsubs = [];
+
         const initializeFirebase = async () => {
             try {
-                // Check if Firebase has data, if not migrate from LocalStorage
+                // Check migration
                 const firebaseBrands = await loadFromFirebase(PATHS.BRANDS);
-
                 if (!firebaseBrands) {
                     console.log('No data in Firebase, migrating from LocalStorage...');
                     await migrateFromLocalStorage();
                 }
 
-                // Load all data from Firebase
-                const [
-                    fbBrands,
-                    fbLines,
-                    fbParts,
-                    fbLabor,
-                    fbSupplies,
-                    fbCrossSell,
-                    fbGlobalRate,
-                    fbDefinitions,
-                    fbIssues
-                ] = await Promise.all([
-                    loadFromFirebase(PATHS.BRANDS, MOCK_BRANDS),
-                    loadFromFirebase(PATHS.LINES, MOCK_LINES),
-                    loadFromFirebase(PATHS.PARTS, MOCK_PARTS),
-                    loadFromFirebase(PATHS.LABOR, MOCK_LABOR_ACTIVITIES),
-                    loadFromFirebase(PATHS.SUPPLIES, MOCK_SUPPLIES),
-                    loadFromFirebase(PATHS.CROSS_SELL, MOCK_CROSS_SELL_ITEMS),
-                    loadFromFirebase(PATHS.GLOBAL_RATE, MOCK_GLOBAL_LABOR_RATE),
-                    loadFromFirebase(PATHS.DEFINITIONS, {}),
-                    loadFromFirebase(PATHS.ISSUES, [])
-                ]);
+                // Subscribe to all paths
+                unsubs.push(subscribeToFirebase(PATHS.BRANDS, (val) => setBrands(val || [])));
+                unsubs.push(subscribeToFirebase(PATHS.LINES, (val) => setVehicleLines(val || [])));
+                unsubs.push(subscribeToFirebase(PATHS.PARTS, (val) => setParts(val || [])));
+                unsubs.push(subscribeToFirebase(PATHS.LABOR, (val) => setLaborActivities(val || [])));
+                unsubs.push(subscribeToFirebase(PATHS.SUPPLIES, (val) => setSupplies(val || [])));
+                unsubs.push(subscribeToFirebase(PATHS.CROSS_SELL, (val) => setCrossSellItems(val || [])));
+                unsubs.push(subscribeToFirebase(PATHS.GLOBAL_RATE, (val) => setGlobalLaborRate(val || 0)));
 
-                setBrands(fbBrands);
-                setVehicleLines(fbLines);
-                setParts(fbParts);
-                setLaborActivities(fbLabor);
-                setSupplies(fbSupplies);
-                setCrossSellItems(fbCrossSell);
-                setGlobalLaborRate(fbGlobalRate);
-                setMaintenanceDefinitions(fbDefinitions);
-                setIssues(fbIssues);
+                // Definitions need special handling for defaults
+                unsubs.push(subscribeToFirebase(PATHS.DEFINITIONS, (val) => {
+                    if (val) {
+                        setMaintenanceDefinitions(val);
+                    } else {
+                        // If empty, maybe initialize defaults? 
+                        // For now, empty object. The user likely has data so this is fine.
+                        setMaintenanceDefinitions({});
+                    }
+                }));
 
-                // Initialize definitions if empty
-                if (Object.keys(fbDefinitions).length === 0) {
-                    const initialDefs = {};
-                    MOCK_LINES.forEach(line => {
-                        MOCK_MAINTENANCES.forEach(maint => {
-                            const laborIds = MOCK_MAINTENANCE_ACTIVITIES[maint.id] || [];
-                            let supplyIds = MOCK_SUPPLIES.map(s => s.id);
-
-                            const allocatedParts = MOCK_PARTS
-                                .filter(p => p.allocations && p.allocations.some(a => a.lineId === line.id))
-                                .map(p => ({
-                                    id: p.id,
-                                    quantity: p.allocations.find(a => a.lineId === line.id).quantity
-                                }));
-
-                            if (allocatedParts.length === 0 && (maint.type === 'mileage' || maint.id === 'm_oil')) {
-                                const oilFilter = MOCK_PARTS.find(p => p.name.toLowerCase().includes('filtro de aceite') && p.lineId === line.id);
-                                const oil = MOCK_PARTS.find(p => p.name.toLowerCase().includes('aceite') && !p.name.toLowerCase().includes('transmision') && p.lineId === line.id);
-                                if (oilFilter) allocatedParts.push({ id: oilFilter.id, quantity: 1 });
-                                if (oil) allocatedParts.push({ id: oil.id, quantity: 4 });
-                            }
-
-                            if (laborIds.length > 0 || allocatedParts.length > 0 || supplyIds.length > 0) {
-                                initialDefs[`${line.id}_${maint.id}`] = {
-                                    laborIds,
-                                    supplyIds,
-                                    parts: allocatedParts
-                                };
-                            }
-                        });
-                    });
-                    setMaintenanceDefinitions(initialDefs);
-                    await saveToFirebase(PATHS.DEFINITIONS, initialDefs);
-                }
+                unsubs.push(subscribeToFirebase(PATHS.ISSUES, (val) => setIssues(val || [])));
 
                 setIsFirebaseInitialized(true);
             } catch (error) {
                 console.error('Error initializing Firebase:', error);
-                setIsFirebaseInitialized(true); // Continue with mock data
             }
         };
 
         initializeFirebase();
+
+        return () => {
+            unsubs.forEach(ref => unsubscribeFromFirebase(ref));
+        };
     }, []);
 
-    // --- Firebase Persistence Effects ---
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.PARTS, parts);
-        }
-    }, [parts, isFirebaseInitialized]);
 
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.LABOR, laborActivities);
-        }
-    }, [laborActivities, isFirebaseInitialized]);
-
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.SUPPLIES, supplies);
-        }
-    }, [supplies, isFirebaseInitialized]);
-
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.CROSS_SELL, crossSellItems);
-        }
-    }, [crossSellItems, isFirebaseInitialized]);
-
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.GLOBAL_RATE, globalLaborRate);
-        }
-    }, [globalLaborRate, isFirebaseInitialized]);
-
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.DEFINITIONS, maintenanceDefinitions);
-        }
-    }, [maintenanceDefinitions, isFirebaseInitialized]);
-
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.BRANDS, brands);
-        }
-    }, [brands, isFirebaseInitialized]);
-
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.LINES, vehicleLines);
-        }
-    }, [vehicleLines, isFirebaseInitialized]);
-
-    useEffect(() => {
-        if (isFirebaseInitialized) {
-            saveToFirebase(PATHS.ISSUES, issues);
-        }
-    }, [issues, isFirebaseInitialized]);
 
     const addBrand = (name) => {
         const newBrand = { id: Date.now(), name };
-        setBrands(prev => [...prev, newBrand]);
+        saveToFirebase(PATHS.BRANDS, [...brands, newBrand]);
         return newBrand;
     };
 
     const updateBrand = (id, name) => {
-        setBrands(prev => prev.map(brand =>
+        const updatedBrands = brands.map(brand =>
             brand.id === id ? { ...brand, name } : brand
-        ));
+        );
+        saveToFirebase(PATHS.BRANDS, updatedBrands);
     };
 
     const addVehicleLine = (lineData) => {
@@ -239,18 +145,19 @@ export const MaintenanceProvider = ({ children }) => {
             ...lineData,
             id: `l_${Date.now()}`
         };
-        setVehicleLines(prev => [...prev, newLine]);
+        saveToFirebase(PATHS.LINES, [...vehicleLines, newLine]);
     };
 
     const updateVehicleLine = (id, updates) => {
-        setVehicleLines(prev => prev.map(line =>
+        const updatedLines = vehicleLines.map(line =>
             line.id === id ? { ...line, ...updates } : line
-        ));
+        );
+        saveToFirebase(PATHS.LINES, updatedLines);
     };
 
     const deleteVehicleLine = (id) => {
-        setVehicleLines(prev => prev.filter(line => line.id !== id));
-        setParts(prev => prev.filter(part => part.lineId !== id));
+        saveToFirebase(PATHS.LINES, vehicleLines.filter(line => line.id !== id));
+        saveToFirebase(PATHS.PARTS, parts.filter(part => part.lineId !== id));
     };
 
     // --- Advisor Selection State ---
@@ -269,25 +176,55 @@ export const MaintenanceProvider = ({ children }) => {
     }, [selectedMaintenance?.id]);
 
     // --- Actions ---
-    const updatePart = (id, updates) => setParts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    const addPart = (newPart) => setParts(prev => [...prev, { ...newPart, id: `p${Date.now()}` }]);
-    const deletePart = (id) => setParts(prev => prev.filter(p => p.id !== id));
+    const updatePart = (id, updates) => {
+        const updatedParts = parts.map(p => p.id === id ? { ...p, ...updates } : p);
+        saveToFirebase(PATHS.PARTS, updatedParts);
+    };
+    const addPart = (newPart) => {
+        const partToAdd = { ...newPart, id: `p${Date.now()}` };
+        saveToFirebase(PATHS.PARTS, [...parts, partToAdd]);
+    };
+    const deletePart = (id) => {
+        saveToFirebase(PATHS.PARTS, parts.filter(p => p.id !== id));
+    };
 
     const getPartsByLine = (lineId) => parts.filter(p => p.lineId === lineId);
 
-    const updateGlobalLaborRate = (newRate) => setGlobalLaborRate(newRate);
+    const updateGlobalLaborRate = (newRate) => saveToFirebase(PATHS.GLOBAL_RATE, newRate);
 
-    const updateLaborActivity = (id, newHours) => setLaborActivities(prev => prev.map(l => l.id === id ? { ...l, hours: newHours } : l));
-    const addLaborActivity = (newActivity) => setLaborActivities(prev => [...prev, { ...newActivity, id: `la${Date.now()}` }]);
-    const deleteLaborActivity = (id) => setLaborActivities(prev => prev.filter(l => l.id !== id));
+    const updateLaborActivity = (id, newHours) => {
+        const updated = laborActivities.map(l => l.id === id ? { ...l, hours: newHours } : l);
+        saveToFirebase(PATHS.LABOR, updated);
+    };
+    const addLaborActivity = (newActivity) => {
+        const added = [...laborActivities, { ...newActivity, id: `la${Date.now()}` }];
+        saveToFirebase(PATHS.LABOR, added);
+    };
+    const deleteLaborActivity = (id) => {
+        const filtered = laborActivities.filter(l => l.id !== id);
+        saveToFirebase(PATHS.LABOR, filtered);
+    };
 
-    const updateSupply = (id, newPrice) => setSupplies(prev => prev.map(s => s.id === id ? { ...s, price: newPrice } : s));
-    const updateCrossSellItem = (id, newPrice) => setCrossSellItems(prev => prev.map(i => i.id === id ? { ...i, price: newPrice } : i));
-    const addCrossSellItem = (newItem) => setCrossSellItems(prev => [...prev, { ...newItem, id: `cs${Date.now()}` }]);
-    const deleteCrossSellItem = (id) => setCrossSellItems(prev => prev.filter(i => i.id !== id));
+    const updateSupply = (id, newPrice) => {
+        const updated = supplies.map(s => s.id === id ? { ...s, price: newPrice } : s);
+        saveToFirebase(PATHS.SUPPLIES, updated);
+    };
+    const updateCrossSellItem = (id, newPrice) => {
+        const updated = crossSellItems.map(i => i.id === id ? { ...i, price: newPrice } : i);
+        saveToFirebase(PATHS.CROSS_SELL, updated);
+    };
+    const addCrossSellItem = (newItem) => {
+        const added = [...crossSellItems, { ...newItem, id: `cs${Date.now()}` }];
+        saveToFirebase(PATHS.CROSS_SELL, added);
+    };
+    const deleteCrossSellItem = (id) => {
+        const filtered = crossSellItems.filter(i => i.id !== id);
+        saveToFirebase(PATHS.CROSS_SELL, filtered);
+    };
 
     const updatePartsByReference = (reference, updates) => {
-        setParts(prev => prev.map(p => p.reference === reference ? { ...p, ...updates } : p));
+        const updatedParts = parts.map(p => p.reference === reference ? { ...p, ...updates } : p);
+        saveToFirebase(PATHS.PARTS, updatedParts);
     };
 
     // --- INHERITANCE LOGIC ---
@@ -299,10 +236,11 @@ export const MaintenanceProvider = ({ children }) => {
 
     const updateMaintenanceDefinition = (lineId, maintenanceId, definition) => {
         const targetId = getEffectiveMaintenanceId(maintenanceId);
-        setMaintenanceDefinitions(prev => ({
-            ...prev,
+        const updatedDefinitions = {
+            ...maintenanceDefinitions,
             [`${lineId}_${targetId}`]: definition
-        }));
+        };
+        saveToFirebase(PATHS.DEFINITIONS, updatedDefinitions);
     };
 
     const resolveMaintenanceDefinition = (lineId, maintenanceId) => {
@@ -486,9 +424,9 @@ export const MaintenanceProvider = ({ children }) => {
         issues,
         addIssue: (description, email) => {
             const newIssue = { id: `issue_${Date.now()}`, description, email, date: new Date().toISOString(), status: 'open' };
-            setIssues(prev => [newIssue, ...prev]);
+            saveToFirebase(PATHS.ISSUES, [newIssue, ...issues]);
         },
-        deleteIssue: (id) => setIssues(prev => prev.filter(i => i.id !== id)),
+        deleteIssue: (id) => saveToFirebase(PATHS.ISSUES, issues.filter(i => i.id !== id)),
 
         vehicleLines,
         brands,
