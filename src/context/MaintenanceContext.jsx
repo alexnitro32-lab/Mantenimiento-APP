@@ -192,8 +192,8 @@ export const MaintenanceProvider = ({ children }) => {
 
     const updateGlobalLaborRate = (newRate) => saveToFirebase(PATHS.GLOBAL_RATE, newRate);
 
-    const updateLaborActivity = (id, newHours) => {
-        const updated = laborActivities.map(l => l.id === id ? { ...l, hours: newHours } : l);
+    const updateLaborActivity = (id, updates) => {
+        const updated = laborActivities.map(l => l.id === id ? { ...l, ...updates } : l);
         saveToFirebase(PATHS.LABOR, updated);
     };
     const addLaborActivity = (newActivity) => {

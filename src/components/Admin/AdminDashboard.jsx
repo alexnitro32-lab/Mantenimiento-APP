@@ -217,6 +217,25 @@ export default function AdminDashboard() {
         setEditingPartId(null);
     };
 
+    // --- Labor Edit State ---
+    const [editingLaborId, setEditingLaborId] = useState(null);
+    const [editLaborForm, setEditLaborForm] = useState({ description: '', hours: 0 });
+
+    const handleEditLaborClick = (act) => {
+        setEditingLaborId(act.id);
+        setEditLaborForm({ description: act.description, hours: act.hours });
+    };
+
+    const handleCancelLaborEdit = () => {
+        setEditingLaborId(null);
+        setEditLaborForm({ description: '', hours: 0 });
+    };
+
+    const handleSaveLaborEdit = (id) => {
+        updateLaborActivity(id, editLaborForm);
+        setEditingLaborId(null);
+    };
+
     // Helper for formatting
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('es-CO', {
@@ -317,16 +336,66 @@ export default function AdminDashboard() {
                                 <div style={{ backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '400px', overflowY: 'auto' }}>
                                     {laborActivities.map(act => (
                                         <div key={act.id} style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 500 }}>{act.description}</div>
-                                                <div style={{ fontSize: '0.8rem', color: '#666' }}>{act.hours} horas</div>
-                                            </div>
-                                            <button style={deleteBtnStyle} onClick={() => confirmDeleteLabor(act.id)} title="Eliminar">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                </svg>
-                                            </button>
+                                            {editingLaborId === act.id ? (
+                                                <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
+                                                    <div style={{ flex: 2 }}>
+                                                        <input
+                                                            style={inputStyle}
+                                                            value={editLaborForm.description}
+                                                            onChange={(e) => setEditLaborForm({ ...editLaborForm, description: e.target.value })}
+                                                            placeholder="Descripción"
+                                                        />
+                                                    </div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            style={inputStyle}
+                                                            value={editLaborForm.hours}
+                                                            onChange={(e) => setEditLaborForm({ ...editLaborForm, hours: Number(e.target.value) })}
+                                                            placeholder="Horas"
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button
+                                                            onClick={() => handleSaveLaborEdit(act.id)}
+                                                            style={{ padding: '0.5rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                            title="Guardar"
+                                                        >
+                                                            💾
+                                                        </button>
+                                                        <button
+                                                            onClick={handleCancelLaborEdit}
+                                                            style={{ padding: '0.5rem', background: '#64748b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                            title="Cancelar"
+                                                        >
+                                                            ❌
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: 500 }}>{act.description}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{act.hours} horas</div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button
+                                                            onClick={() => handleEditLaborClick(act)}
+                                                            style={{ padding: '0.4rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                            title="Editar"
+                                                        >
+                                                            ✏️
+                                                        </button>
+                                                        <button style={deleteBtnStyle} onClick={() => confirmDeleteLabor(act.id)} title="Eliminar">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
