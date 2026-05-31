@@ -1,7 +1,97 @@
 import { useState, useEffect } from 'react';
 import { useMaintenance, calculateAvailableMaintenances } from '../../context/MaintenanceContext';
 import { MOCK_MAINTENANCES } from '../../data/mockData';
+import { CATEGORIAS_ACCESORIOS } from '../../data/accesoriosData';
 import { formatCurrency } from '../../utils/format';
+
+function AccesorioRow({ acc, onSave, onSaveImagen }) {
+    const [editing, setEditing] = useState(false);
+    const [precio, setPrecio] = useState(acc.precio);
+
+    const handleSave = () => {
+        onSave(acc.id, precio);
+        setEditing(false);
+    };
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 800 * 1024) {
+            alert('La imagen no debe superar 800 KB.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => onSaveImagen(acc.id, ev.target.result);
+        reader.readAsDataURL(file);
+    };
+
+    return (
+        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+            {/* Miniatura */}
+            <td style={{ padding: '0.5rem 0.75rem', width: '64px', textAlign: 'center' }}>
+                <div style={{
+                    width: '52px', height: '52px', borderRadius: '8px',
+                    background: acc.imagen ? 'transparent' : '#f1f5f9',
+                    border: '1px solid #e2e8f0',
+                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.3rem'
+                }}>
+                    {acc.imagen
+                        ? <img src={acc.imagen} alt={acc.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : '📦'
+                    }
+                </div>
+            </td>
+            <td style={{ padding: '0.6rem 0.75rem', fontWeight: 500, color: '#1e293b' }}>
+                <div>{acc.nombre}</div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>{acc.referencia}</div>
+            </td>
+            <td style={{ padding: '0.6rem 0.75rem', fontSize: '0.83rem', color: '#64748b' }}>{acc.aplicaPara}</td>
+            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>
+                {editing ? (
+                    <input
+                        type="number"
+                        value={precio}
+                        onChange={e => setPrecio(Number(e.target.value))}
+                        style={{ width: '120px', padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: '6px', textAlign: 'right', fontSize: '0.9rem' }}
+                        autoFocus
+                    />
+                ) : (
+                    <span style={{ fontWeight: 600, color: '#002c5f' }}>{formatCurrency(acc.precio)}</span>
+                )}
+            </td>
+            <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    {/* Subir imagen */}
+                    <label style={{
+                        padding: '4px 8px', background: '#f8fafc', color: '#475569',
+                        border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem',
+                        display: 'inline-flex', alignItems: 'center', gap: '4px'
+                    }} title="Subir imagen">
+                        📷
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} />
+                    </label>
+                    {/* Editar precio */}
+                    {editing ? (
+                        <>
+                            <button onClick={handleSave} style={{ padding: '4px 8px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                Guardar
+                            </button>
+                            <button onClick={() => { setEditing(false); setPrecio(acc.precio); }} style={{ padding: '4px 8px', background: '#94a3b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                ✕
+                            </button>
+                        </>
+                    ) : (
+                        <button onClick={() => setEditing(true)} style={{ padding: '4px 8px', background: 'none', color: 'var(--primary-color)', border: '1px solid var(--primary-color)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                            $ Editar
+                        </button>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+}
 
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState('global');
@@ -35,7 +125,10 @@ export default function AdminDashboard() {
         updateBrand,
         addVehicleLine,
         updateVehicleLine,
-        deleteVehicleLine
+        deleteVehicleLine,
+        accesorios,
+        updateAccesorioPrecio,
+        updateAccesorioImagen
     } = useMaintenance();
 
     // --- Local State for Forms ---
@@ -282,6 +375,7 @@ export default function AdminDashboard() {
                 <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
                     <button style={tabStyle('global')} onClick={() => setActiveTab('global')}>Global / Mano de Obra</button>
                     <button style={tabStyle('cat_parts')} onClick={() => setActiveTab('cat_parts')}>Catálogo Repuestos</button>
+                    <button style={tabStyle('accesorios')} onClick={() => setActiveTab('accesorios')}>Accesorios</button>
                     <button style={tabStyle('cross_sell')} onClick={() => setActiveTab('cross_sell')}>Venta Cruzada</button>
                     <button style={tabStyle('config')} onClick={() => setActiveTab('config')}>Configurador Recetas</button>
                     <button style={tabStyle('vehicles')} onClick={() => setActiveTab('vehicles')}>Vehículos</button>
@@ -419,6 +513,30 @@ export default function AdminDashboard() {
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Credenciales del Editor de Precios */}
+                        <div style={{ marginTop: '2rem', padding: '1.25rem', background: '#fefce8', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                            <h4 style={{ margin: '0 0 1rem 0', color: '#92400e', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span>🔑</span> Acceso Editor de Precios
+                            </h4>
+                            <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#78350f' }}>
+                                Esta cuenta tiene acceso restringido: solo puede editar precios y descripciones de repuestos en la Vista General.
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', maxWidth: '480px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#92400e', marginBottom: '4px' }}>Correo</label>
+                                    <div style={{ padding: '0.5rem 0.75rem', background: 'white', border: '1px solid #fde68a', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.9rem', color: '#1e293b' }}>
+                                        editor@automotor.co
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#92400e', marginBottom: '4px' }}>Contraseña</label>
+                                    <div style={{ padding: '0.5rem 0.75rem', background: 'white', border: '1px solid #fde68a', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.9rem', color: '#1e293b' }}>
+                                        Repuestos.2026#
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -684,6 +802,46 @@ export default function AdminDashboard() {
                 }
 
 
+
+                {/* --- ACCESORIOS TAB --- */}
+                {activeTab === 'accesorios' && (
+                    <div>
+                        <h3 style={{ marginBottom: '0.5rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>Precios Catálogo de Accesorios</h3>
+                        <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1.5rem', background: '#f0f9ff', padding: '0.75rem 1rem', borderRadius: '6px', borderLeft: '4px solid #3b82f6' }}>
+                            <strong>Edición de precios:</strong> Los cambios se reflejan en tiempo real en el catálogo visible para los asesores. El precio del editor de repuestos también tiene acceso a esta sección.
+                        </p>
+
+                        {CATEGORIAS_ACCESORIOS.map(cat => {
+                            const items = accesorios.filter(a => a.categoriaId === cat.id);
+                            if (items.length === 0) return null;
+                            return (
+                                <div key={cat.id} style={{ marginBottom: '2rem' }}>
+                                    <h4 style={{ margin: '0 0 0.75rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span>{cat.icono}</span> {cat.nombre}
+                                    </h4>
+                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                                            <thead style={{ background: '#f8fafc' }}>
+                                                <tr>
+                                                    <th style={{ padding: '0.6rem 0.75rem', borderBottom: '1px solid #e2e8f0', width: '64px' }}></th>
+                                                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontWeight: 600 }}>Accesorio</th>
+                                                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontWeight: 600 }}>Aplica para</th>
+                                                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontWeight: 600, width: '160px' }}>Precio (IVA inc.)</th>
+                                                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'center', borderBottom: '1px solid #e2e8f0', width: '120px' }}>Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {items.map(acc => (
+                                                    <AccesorioRow key={acc.id} acc={acc} onSave={updateAccesorioPrecio} onSaveImagen={updateAccesorioImagen} />
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 {/* --- CROSS SELL TAB --- */}
                 {

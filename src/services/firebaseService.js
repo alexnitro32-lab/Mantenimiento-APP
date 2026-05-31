@@ -11,7 +11,8 @@ const PATHS = {
     CROSS_SELL: 'crossSellItems',
     ISSUES: 'issues',
     BRANDS: 'brands',
-    LINES: 'vehicleLines'
+    LINES: 'vehicleLines',
+    ACCESORIOS: 'accesorios'
 };
 
 /**

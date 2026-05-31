@@ -11,6 +11,7 @@ import {
     MOCK_CROSS_SELL_ITEMS,
     IVA_RATE
 } from '../data/mockData';
+import { MOCK_ACCESORIOS } from '../data/accesoriosData';
 import { saveToFirebase, loadFromFirebase, subscribeToFirebase, unsubscribeFromFirebase, PATHS, migrateFromLocalStorage } from '../services/firebaseService';
 
 // --- HELPER FOR SHARED FILTERING LOGIC ---
@@ -76,6 +77,7 @@ export const MaintenanceProvider = ({ children }) => {
     const [maintenances, setMaintenances] = useState(MOCK_MAINTENANCES);
     const [maintenanceDefinitions, setMaintenanceDefinitions] = useState({});
     const [issues, setIssues] = useState([]);
+    const [accesorios, setAccesorios] = useState(MOCK_ACCESORIOS);
 
     // --- Initialize Firebase Data & Subscriptions ---
     useEffect(() => {
@@ -111,6 +113,7 @@ export const MaintenanceProvider = ({ children }) => {
                 }));
 
                 unsubs.push(subscribeToFirebase(PATHS.ISSUES, (val) => setIssues(val || [])));
+                unsubs.push(subscribeToFirebase(PATHS.ACCESORIOS, (val) => setAccesorios(val || MOCK_ACCESORIOS)));
 
                 setIsFirebaseInitialized(true);
             } catch (error) {
@@ -427,6 +430,16 @@ export const MaintenanceProvider = ({ children }) => {
             saveToFirebase(PATHS.ISSUES, [newIssue, ...issues]);
         },
         deleteIssue: (id) => saveToFirebase(PATHS.ISSUES, issues.filter(i => i.id !== id)),
+
+        accesorios,
+        updateAccesorioPrecio: (id, precio) => {
+            const updated = accesorios.map(a => a.id === id ? { ...a, precio: Number(precio) } : a);
+            saveToFirebase(PATHS.ACCESORIOS, updated);
+        },
+        updateAccesorioImagen: (id, imagenUrl) => {
+            const updated = accesorios.map(a => a.id === id ? { ...a, imagen: imagenUrl } : a);
+            saveToFirebase(PATHS.ACCESORIOS, updated);
+        },
 
         vehicleLines,
         brands,
